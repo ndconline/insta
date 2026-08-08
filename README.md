@@ -5,6 +5,8 @@ Unofficial cross-platform (Windows / macOS / Linux) tool to control the
 Bluetooth LE from a computer, mic mode, mic combination, noise reduction,
 etc.,  without the Android app.
 
+Check the tools folder for browser-based Web Bluetooth GATT explorer. This html file can be downloaded and used locally. Still playing with this at the moment. 
+
 **Status: protocol reverse-engineering in progress.** Insta360 does not
 publish a spec for the Mic Pro's BLE control channel, so this repo does not
 ship working "set noise reduction" commands out of the box. What it *does*
