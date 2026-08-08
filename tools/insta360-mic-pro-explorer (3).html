@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLE Explorer - local Web Bluetooth tool</title>
+<style>
+  :root{
+    --bg: #14171c;
+    --panel: #1b1f26;
+    --panel-2: #20242c;
+    --line: #2a2f38;
+    --line-soft: #23272f;
+    --text: #eef0f2;
+    --text-dim: #8b93a1;
+    --text-faint: #565d69;
+    --amber: #e8a33d;
+    --amber-dim: #9c752f;
+    --teal: #4fd1c5;
+    --red: #e5606a;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body{
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(232,163,61,0.055) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  header{
+    padding: 26px 28px 18px;
+    border-bottom: 1px solid var(--line);
+    display:flex; align-items:baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1{
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin:0;
+    color: var(--text);
+  }
+  header h1 .dot{ color: var(--amber); }
+  header p{
+    margin:0; font-size: 13px; color: var(--text-dim); line-height:1.5;
+  }
+  .badge-row{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .pill{
+    font-family: var(--mono); font-size: 11px; padding: 3px 9px;
+    border: 1px solid var(--line); border-radius: 20px; color: var(--text-dim);
+  }
+  .pill.local{ color: var(--teal); border-color: rgba(79,209,197,0.35); }
+
+  nav.tabs{
+    max-width: 1180px; margin: 0 auto; padding: 16px 28px 0;
+    display: flex; gap: 6px; border-bottom: 1px solid var(--line);
+  }
+  nav.tabs button{
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    padding: 9px 16px; background: transparent; border: none;
+    color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  nav.tabs button.active{ color: var(--amber); border-bottom-color: var(--amber); }
+  nav.tabs button:hover:not(.active){ color: var(--text); }
+
+  main{
+    max-width: 1180px; margin: 0 auto;
+    padding: 24px 28px 60px;
+  }
+  .tabpage{ display:none; }
+  .tabpage.active{ display:block; }
+
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 880px){ .grid2{ grid-template-columns: 1fr; } }
+
+  section.panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .panel-head{
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    display:flex; align-items:center; justify-content: space-between;
+    gap: 10px;
+  }
+  .panel-head h2{
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    margin:0; color: var(--text-dim); font-weight: 600;
+  }
+  .panel-body{ padding: 16px; }
+
+  label{ display:block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  input[type=text]{
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    outline: none;
+  }
+  input[type=text]:focus{ border-color: var(--amber-dim); }
+  input[type=text]::placeholder{ color: var(--text-faint); }
+
+  .row{ display:flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row + .row{ margin-top: 10px; }
+
+  button{
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  button:hover:not(:disabled){ border-color: var(--amber-dim); color: var(--amber); }
+  button:disabled{ opacity: 0.4; cursor: not-allowed; }
+  button.primary{
+    background: var(--amber); border-color: var(--amber); color: #201502;
+  }
+  button.primary:hover:not(:disabled){ color: #201502; filter: brightness(1.08); }
+  button.ghost{ background: transparent; }
+  button.small{ padding: 5px 9px; font-size: 11px; }
+  button:focus-visible{ outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  .status{
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+    display:flex; align-items:center; gap: 8px; margin-top: 12px;
+  }
+  .status .led{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-faint); flex: none;
+  }
+  .status.connected .led{ background: var(--teal); box-shadow: 0 0 8px rgba(79,209,197,.7); }
+  .status.error .led{ background: var(--red); box-shadow: 0 0 8px rgba(229,96,106,.7); }
+
+  .hint{ font-size: 12px; color: var(--text-faint); line-height: 1.5; margin-top: 10px; }
+  .hint code{ font-family: var(--mono); color: var(--text-dim); }
+
+  .device-card{
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px 18px;
+  }
+  .device-field{
+    border: 1px solid var(--line-soft); border-radius: 6px; padding: 8px 10px;
+    background: var(--panel-2);
+  }
+  .device-field .k{ font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); }
+  .device-field .v{ font-family: var(--mono); font-size: 13px; color: var(--text); margin-top: 3px; word-break: break-word; }
+  .device-field .v.pending{ color: var(--text-faint); }
+  .device-field .v.teal{ color: var(--teal); }
+
+  #tree{ font-family: var(--mono); font-size: 12.5px; max-height: 620px; overflow-y: auto; }
+  .svc{ border-top: 1px solid var(--line-soft); }
+  .svc:first-child{ border-top: none; }
+  .svc-head{ padding: 10px 4px; color: var(--amber); word-break: break-all; }
+  .svc-head .tag{ color: var(--text-faint); font-size: 11px; }
+  .char{
+    margin: 0 0 10px 14px; padding: 8px 10px;
+    border: 1px solid var(--line-soft); border-radius: 6px; background: var(--panel-2);
+  }
+  .char .uuid{ color: var(--text); word-break: break-all; }
+  .char .friendly{ color: var(--amber); font-size: 11px; margin-top: 2px; }
+  .props{ margin: 6px 0; display:flex; gap:6px; flex-wrap: wrap; }
+  .props span{
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    border: 1px solid var(--line); color: var(--text-dim);
+  }
+  .props span.on{ color: var(--teal); border-color: rgba(79,209,197,.4); }
+  .char-controls{ display:flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .char-value{
+    margin-top: 6px; font-size: 12px; color: var(--teal);
+    word-break: break-all;
+  }
+  .char-value .decoded{ color: var(--amber); }
+  .char.subscribed{ border-color: rgba(79,209,197,.5); }
+
+  #log{
+    font-family: var(--mono); font-size: 12.5px;
+    background: #0f1216;
+    border-radius: 6px;
+    padding: 12px;
+    height: 420px;
+    overflow-y: auto;
+    line-height: 1.65;
+  }
+  #log .line{ white-space: pre-wrap; word-break: break-all; }
+  #log .line .t{ color: var(--text-faint); }
+  #log .line.rx .k{ color: var(--teal); }
+  #log .line.tx .k{ color: var(--amber); }
+  #log .line.sys .k{ color: var(--text-dim); }
+  #log .line.err .k{ color: var(--red); }
+  #log .cursor{
+    display:inline-block; width: 7px; height: 13px; background: var(--amber);
+    animation: blink 1.1s steps(1) infinite; vertical-align: -2px;
+    box-shadow: 0 0 6px rgba(232,163,61,.7);
+  }
+  @keyframes blink{ 50%{ opacity: 0; } }
+
+  select{
+    font-family: var(--mono); font-size: 12px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px;
+  }
+
+  .preset-group{ margin-bottom: 18px; }
+  .preset-group h3{
+    font-size: 12px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: .06em; margin: 0 0 8px;
+  }
+  .preset{
+    display:grid; grid-template-columns: 1fr 1.6fr auto; gap: 8px;
+    align-items: center; margin-bottom: 8px;
+  }
+  .preset input[type=text]{ font-size: 12px; padding: 7px 9px; }
+  .preset-name{ font-family: var(--sans); font-size: 13px; }
+  .preset-note{ font-size: 11px; color: var(--text-faint); grid-column: 1 / -1; margin: -3px 0 2px; }
+
+  footer{
+    max-width: 1180px; margin: 0 auto; padding: 0 28px 40px;
+    font-size: 12px; color: var(--text-faint); line-height: 1.6;
+  }
+  footer a{ color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot">*</span> BLE Explorer</h1>
+  <p>A local, general purpose Bluetooth LE tool. Built for the Insta360 Mic Pro reverse engineering project, works with any BLE device.</p>
+  <div class="badge-row">
+    <span class="pill local">runs entirely in this tab, nothing uploaded</span>
+    <span class="pill" id="browser-support-pill">checking browser...</span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="connect">Connect</button>
+  <button class="tab-btn" data-tab="explore">Explore</button>
+  <button class="tab-btn" data-tab="settings">Settings / Presets</button>
+  <button class="tab-btn" data-tab="log">Log</button>
+</nav>
+
+<main>
+
+  <!-- CONNECT TAB -->
+  <section class="tabpage active" id="tab-connect">
+    <div class="grid2">
+      <section class="panel">
+        <div class="panel-head"><h2>Connect</h2></div>
+        <div class="panel-body">
+          <label for="extra-uuids">Extra service UUIDs to request access to (optional, comma separated)</label>
+          <input id="extra-uuids" type="text" placeholder="e.g. 0000ffe0-0000-1000-8000-00805f9b34fb">
+          <div class="hint">
+            Web Bluetooth only exposes services listed up front. Generic
+            Access, Device Information and Battery are always requested, so
+            device name and details can be pulled automatically. If you
+            know a device's custom control service UUID, add it here before
+            connecting, otherwise run Explore first, note what is missing,
+            and reconnect with it added.
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="primary" id="btn-connect-any">Connect to any device...</button>
+            <button class="ghost" id="btn-connect-insta">Connect (filter: Insta360)...</button>
+          </div>
+          <div class="row">
+            <button class="ghost" id="btn-disconnect" disabled>Disconnect</button>
+          </div>
+          <div class="status" id="status">
+            <span class="led"></span><span id="status-text">not connected</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Broaden discovery</h2>
+          <button class="small" id="btn-toggle-common">select all</button>
+        </div>
+        <div class="panel-body">
+          <div class="hint" style="margin-top:0">
+            Works for any BLE device, not only the mic. Check any group
+            below before connecting to request access to those services too.
+            A device that shows almost nothing after Discover, one service
+            and no writable characteristics, usually has a vendor-specific
+            control service that was never requested. These checkboxes
+            cover the service UUIDs most devices reuse from reference chip
+            designs, so this often finds it without needing the exact UUID.
+          </div>
+          <div id="common-services"></div>
+          <div class="hint">
+            For the complete picture with no restriction at all, Chrome and
+            Edge ship a built in inspector: open a new tab, go to
+            <code>chrome://bluetooth-internals</code>, and use its own Scan
+            and Inspect buttons. It shows every service and characteristic
+            a device exposes, including ones this page is not allowed to
+            see, which is the fastest way to find an unknown vendor UUID.
+            Paste anything useful you find back into the field above.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Device details</h2></div>
+        <div class="panel-body">
+          <div class="device-card">
+            <div class="device-field"><div class="k">Name</div><div class="v pending" id="dd-name">not connected</div></div>
+            <div class="device-field"><div class="k">Device ID</div><div class="v pending" id="dd-id">-</div></div>
+            <div class="device-field"><div class="k">Manufacturer</div><div class="v pending" id="dd-manufacturer">-</div></div>
+            <div class="device-field"><div class="k">Model number</div><div class="v pending" id="dd-model">-</div></div>
+            <div class="device-field"><div class="k">Serial number</div><div class="v pending" id="dd-serial">-</div></div>
+            <div class="device-field"><div class="k">Hardware rev.</div><div class="v pending" id="dd-hw">-</div></div>
+            <div class="device-field"><div class="k">Firmware rev.</div><div class="v pending" id="dd-fw">-</div></div>
+            <div class="device-field"><div class="k">Software rev.</div><div class="v pending" id="dd-sw">-</div></div>
+            <div class="device-field"><div class="k">Battery</div><div class="v pending" id="dd-battery">-</div></div>
+          </div>
+          <div class="hint">
+            Pulled automatically right after connecting, from the standard
+            Generic Access, Device Information and Battery services when the
+            device exposes them. Some devices only reveal their real name
+            here, not in the browser's pairing dialog.
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- EXPLORE TAB -->
+  <section class="tabpage" id="tab-explore">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Services and characteristics</h2>
+        <button class="small" id="btn-discover" disabled>Discover</button>
+      </div>
+      <div class="panel-body">
+        <div id="tree">
+          <div class="hint">Connect to a device on the Connect tab, then click Discover.</div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- SETTINGS TAB -->
+  <section class="tabpage" id="tab-settings">
+    <section class="panel">
+      <div class="panel-head"><h2>Send raw bytes</h2></div>
+      <div class="panel-body">
+        <label for="write-char">Target characteristic</label>
+        <select id="write-char"><option>connect and discover first</option></select>
+        <div class="row" style="margin-top:10px">
+          <div style="flex:1; min-width:180px">
+            <label for="write-hex">Hex payload</label>
+            <input id="write-hex" type="text" placeholder="a5 01 02 a8">
+          </div>
+          <div>
+            <label for="write-mode">Mode</label>
+            <select id="write-mode">
+              <option value="response">with response</option>
+              <option value="noresponse">without response</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="primary" id="btn-write" disabled>Send</button>
+        </div>
+        <div class="hint">
+          Options tagged "GATT internal" belong to the Bluetooth stack
+          itself (feature negotiation, caching), not to the device, they
+          will not do anything useful and are only listed because the spec
+          marks them writable. If a write fails with "GATT Error Unknown,"
+          that specific message is a known Chrome quirk, most common on
+          Windows, and does not always mean the command itself was wrong,
+          see the Log tab for suggestions logged alongside the error.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Insta360 Mic Pro settings (experimental)</h2></div>
+      <div class="panel-body">
+        <div class="hint" style="margin-top:0">
+          These map to the settings shown in the official app. Insta360 has
+          not published the command bytes, so each hex value below starts
+          blank. Fill one in once you have decoded it (see
+          docs/REVERSE_ENGINEERING.md), pick the characteristic it belongs
+          to, then use the buttons to test it live. Values you fill in stay
+          in this tab only, nothing is saved to disk.
+        </div>
+
+        <div class="preset-group">
+          <h3>Mic mode</h3>
+          <div class="preset-note">Which capsule or combination of capsules is active.</div>
+          <div id="preset-mic-mode"></div>
+        </div>
+
+        <div class="preset-group">
+          <h3>Noise reduction</h3>
+          <div class="preset-note">Noise reduction strength.</div>
+          <div id="preset-noise-reduction"></div>
+        </div>
+
+        <div class="preset-group">
+          <h3>Custom presets</h3>
+          <div class="preset-note">Add your own named command, useful for anything not covered above, or for a different device entirely.</div>
+          <div id="preset-custom"></div>
+          <button class="small" id="btn-add-preset" style="margin-top:4px">Add preset</button>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- LOG TAB -->
+  <section class="tabpage" id="tab-log">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Live log</h2>
+        <div class="row">
+          <button class="small" id="btn-clear-log">Clear</button>
+          <button class="small" id="btn-save-log">Save as .txt</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="log"><div class="line sys"><span class="t">--:--:--</span> <span class="k">[sys]</span> waiting for connection<span class="cursor"></span></div></div>
+      </div>
+    </section>
+  </section>
+
+</main>
+
+<footer>
+  Web Bluetooth is supported in Chrome, Edge, and other Chromium browsers on
+  desktop and Android, not in Firefox or Safari. This page can be opened
+  straight from disk (file://) or served locally, both count as a secure
+  context, so no hosting is required.
+  See docs/REVERSE_ENGINEERING.md in the repo for the full capture workflow.
+</footer>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $('status');
+  const statusText = $('status-text');
+  const logEl = $('log');
+  const treeEl = $('tree');
+  const writeCharSelect = $('write-char');
+  const supportPill = $('browser-support-pill');
+
+  let device = null;
+  let server = null;
+  /** uuid -> BluetoothRemoteGATTCharacteristic */
+  const charByUuid = new Map();
+
+  const STANDARD_SERVICES = ['generic_access', 'device_information', 'battery_service'];
+
+  // Grouped, checkable service UUIDs for the "Broaden discovery" panel.
+  // Group 1 is other Bluetooth SIG standard services worth trying, useful
+  // for phones, wearables, fitness and health gadgets, HID devices, and
+  // so on. Group 2 is not standardized by the SIG, but these exact UUIDs
+  // get reused across many unrelated vendor products because they come
+  // straight from the reference firmware of common BLE chipsets, so they
+  // are worth a guess on almost any custom accessory, including things
+  // like the Mic Pro's control channel.
+  const COMMON_SERVICE_GROUPS = [
+    {
+      label: 'Other standard services',
+      services: [
+        ['Generic Attribute', '00001801-0000-1000-8000-00805f9b34fb'],
+        ['Human Interface Device', '00001812-0000-1000-8000-00805f9b34fb'],
+        ['Immediate Alert', '00001802-0000-1000-8000-00805f9b34fb'],
+        ['Link Loss', '00001803-0000-1000-8000-00805f9b34fb'],
+        ['Tx Power', '00001804-0000-1000-8000-00805f9b34fb'],
+        ['Current Time', '00001805-0000-1000-8000-00805f9b34fb'],
+        ['Heart Rate', '0000180d-0000-1000-8000-00805f9b34fb'],
+        ['Health Thermometer', '00001809-0000-1000-8000-00805f9b34fb'],
+        ['Environmental Sensing', '0000181a-0000-1000-8000-00805f9b34fb'],
+        ['Cycling Speed and Cadence', '00001816-0000-1000-8000-00805f9b34fb'],
+        ['Running Speed and Cadence', '00001814-0000-1000-8000-00805f9b34fb'],
+        ['Weight Scale', '0000181d-0000-1000-8000-00805f9b34fb'],
+      ],
+    },
+    {
+      label: 'Common vendor control and serial bridges',
+      services: [
+        ['Nordic UART Service (nRF5x designs)', '6e400001-b5a3-f393-e0a9-e50e24dcca9e'],
+        ['HM-10 / TI style serial (0xFFE0)', '0000ffe0-0000-1000-8000-00805f9b34fb'],
+        ['Microchip RN487x Transparent UART', '49535343-fe7d-4ae5-8fa9-9fafd205e455'],
+        ['Silicon Labs OTA service', '1d14d6ee-fd63-4fa1-bfa4-8f47b42119f0'],
+        ['Apple Notification Center Service', '7905f431-b5ce-4e99-a40f-4b1e122d00d0'],
+        ['Apple Media Service', '89d3502b-0f36-433a-8ef4-c502ad55f8dc'],
+      ],
+    },
+  ];
+
+  // Standard 16-bit characteristic UUIDs worth decoding as text or numbers
+  // instead of leaving as raw hex. Keyed on the full 128-bit form the
+  // browser reports.
+  const KNOWN_CHARS = {
+    '00002a00-0000-1000-8000-00805f9b34fb': { name: 'Device Name', decode: decodeUtf8 },
+    '00002a29-0000-1000-8000-00805f9b34fb': { name: 'Manufacturer Name', decode: decodeUtf8 },
+    '00002a24-0000-1000-8000-00805f9b34fb': { name: 'Model Number', decode: decodeUtf8 },
+    '00002a25-0000-1000-8000-00805f9b34fb': { name: 'Serial Number', decode: decodeUtf8 },
+    '00002a27-0000-1000-8000-00805f9b34fb': { name: 'Hardware Revision', decode: decodeUtf8 },
+    '00002a26-0000-1000-8000-00805f9b34fb': { name: 'Firmware Revision', decode: decodeUtf8 },
+    '00002a28-0000-1000-8000-00805f9b34fb': { name: 'Software Revision', decode: decodeUtf8 },
+    '00002a19-0000-1000-8000-00805f9b34fb': { name: 'Battery Level', decode: (v) => `${v.getUint8(0)} %` },
+    '00002a6e-0000-1000-8000-00805f9b34fb': { name: 'Temperature', decode: (v) => `${(v.getInt16(0, true) / 100).toFixed(2)} C` },
+    // Part of the Generic Attribute service (0x1801), core Bluetooth
+    // stack plumbing rather than anything device-specific. 0x2B29 is
+    // spec-defined as writable, so it will show up as a write target,
+    // but writing to it negotiates GATT caching/EATT behavior, it is
+    // not a device setting and testing commands against it will not do
+    // anything useful.
+    '00002b29-0000-1000-8000-00805f9b34fb': { name: 'Client Supported Features (GATT internal, not a device setting)', decode: null, internal: true },
+    '00002b2a-0000-1000-8000-00805f9b34fb': { name: 'Database Hash (GATT internal)', decode: null, internal: true },
+    '00002b3a-0000-1000-8000-00805f9b34fb': { name: 'Server Supported Features (GATT internal)', decode: null, internal: true },
+  };
+
+  function decodeUtf8(dataView) {
+    try {
+      return new TextDecoder().decode(dataView.buffer ? dataView : new Uint8Array(dataView));
+    } catch (e) {
+      return '(not text)';
+    }
+  }
+
+  function nowStamp() {
+    return new Date().toTimeString().slice(0, 8);
+  }
+
+  function log(kind, tag, msg) {
+    const line = document.createElement('div');
+    line.className = 'line ' + kind;
+    line.innerHTML = `<span class="t">${nowStamp()}</span> <span class="k">[${tag}]</span> ${msg}`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setStatus(state, text) {
+    statusEl.className = 'status' + (state ? ' ' + state : '');
+    statusText.textContent = text;
+  }
+
+  function bufToHex(buf) {
+    const bytes = buf instanceof DataView ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) : new Uint8Array(buf);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+  }
+
+  function hexToBuf(hex) {
+    const clean = hex.trim().replace(/0x/gi, '').split(/[\s,]+/).filter(Boolean);
+    const bytes = clean.map(h => {
+      const v = parseInt(h, 16);
+      if (Number.isNaN(v) || v < 0 || v > 255) throw new Error(`bad hex byte "${h}"`);
+      return v;
+    });
+    return new Uint8Array(bytes);
+  }
+
+  function setField(id, text, cls) {
+    const el = $(id);
+    el.textContent = text;
+    el.className = 'v' + (cls ? ' ' + cls : '');
+  }
+
+  // --- tabs ---
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      $('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // --- browser support check ---
+  if (!navigator.bluetooth) {
+    supportPill.textContent = 'Web Bluetooth unavailable, use Chrome or Edge';
+    supportPill.style.color = 'var(--red)';
+    supportPill.style.borderColor = 'rgba(229,96,106,.4)';
+    $('btn-connect-any').disabled = true;
+    $('btn-connect-insta').disabled = true;
+    log('err', 'sys', 'navigator.bluetooth is not available in this browser. Web Bluetooth works in Chrome or Edge, desktop or Android, not Firefox or Safari.');
+  } else {
+    supportPill.textContent = 'Web Bluetooth available';
+    supportPill.style.color = 'var(--teal)';
+    supportPill.style.borderColor = 'rgba(79,209,197,.4)';
+  }
+
+  function resetDeviceDetails() {
+    setField('dd-name', 'not connected', 'pending');
+    setField('dd-id', '-', 'pending');
+    setField('dd-manufacturer', '-', 'pending');
+    setField('dd-model', '-', 'pending');
+    setField('dd-serial', '-', 'pending');
+    setField('dd-hw', '-', 'pending');
+    setField('dd-fw', '-', 'pending');
+    setField('dd-sw', '-', 'pending');
+    setField('dd-battery', '-', 'pending');
+  }
+
+  // --- connect ---
+  async function doConnect(requestOptions) {
+    try {
+      // Starting a fresh connection invalidates anything drawn from a
+      // previous one, clear it now rather than waiting for a
+      // disconnect event that may never fire (for example, when the
+      // page itself is the one that changes device).
+      charByUuid.clear();
+      treeEl.innerHTML = '<div class="hint">Connecting...</div>';
+      writeCharSelect.innerHTML = '<option>connect and discover first</option>';
+
+      log('sys', 'sys', 'requesting device, pick it from the browser dialog...');
+      device = await navigator.bluetooth.requestDevice(requestOptions);
+
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+
+      setField('dd-name', device.name || '(name hidden by browser, trying GATT read)', device.name ? '' : 'pending');
+      setField('dd-id', device.id || '-');
+
+      log('sys', 'sys', `selected "${device.name || '(unnamed device)'}", connecting...`);
+      server = await device.gatt.connect();
+
+      setStatus('connected', `${device.name || '(unnamed)'} - connected`);
+      $('btn-connect-any').disabled = true;
+      $('btn-connect-insta').disabled = true;
+      $('btn-disconnect').disabled = false;
+      $('btn-discover').disabled = false;
+      log('sys', 'sys', 'GATT connected. Pulling device details...');
+
+      await pullDeviceDetails();
+      log('sys', 'sys', 'Go to the Explore tab and click Discover to enumerate services.');
+    } catch (err) {
+      setStatus('error', 'connection cancelled or failed');
+      log('err', 'sys', String(err.message || err));
+    }
+  }
+
+  // --- common services checkbox panel ---
+  const commonServicesEl = $('common-services');
+  COMMON_SERVICE_GROUPS.forEach((group, gi) => {
+    const groupDiv = document.createElement('div');
+    groupDiv.style.marginBottom = '10px';
+    groupDiv.innerHTML = `<div style="font-size:11px; color: var(--text-dim); text-transform: uppercase; letter-spacing:.05em; margin: 8px 0 6px">${group.label}</div>`;
+    group.services.forEach(([label, uuid], si) => {
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex; gap:8px; align-items:center; font-size:12px; color: var(--text-dim); margin-bottom:5px; cursor:pointer;';
+      row.innerHTML = `<input type="checkbox" class="common-svc-check" data-uuid="${uuid}" id="svc-${gi}-${si}"> <span>${label}</span>`;
+      groupDiv.appendChild(row);
+    });
+    commonServicesEl.appendChild(groupDiv);
+  });
+
+  $('btn-toggle-common').addEventListener('click', () => {
+    const boxes = document.querySelectorAll('.common-svc-check');
+    const allChecked = Array.from(boxes).every(b => b.checked);
+    boxes.forEach(b => { b.checked = !allChecked; });
+    $('btn-toggle-common').textContent = allChecked ? 'select all' : 'clear all';
+  });
+
+  function checkedCommonServices() {
+    return Array.from(document.querySelectorAll('.common-svc-check:checked')).map(b => b.dataset.uuid);
+  }
+
+  function gatherOptionalServices() {
+    const extra = $('extra-uuids').value.split(',').map(s => s.trim()).filter(Boolean);
+    return [...new Set([...STANDARD_SERVICES, ...checkedCommonServices(), ...extra])];
+  }
+
+  $('btn-connect-any').addEventListener('click', () => {
+    doConnect({ acceptAllDevices: true, optionalServices: gatherOptionalServices() });
+  });
+
+  $('btn-connect-insta').addEventListener('click', () => {
+    doConnect({
+      filters: [{ namePrefix: 'Insta360' }, { namePrefix: 'insta360' }, { namePrefix: 'Mic' }],
+      optionalServices: gatherOptionalServices(),
+    });
+  });
+
+  $('btn-disconnect').addEventListener('click', () => {
+    if (device && device.gatt.connected) device.gatt.disconnect();
+  });
+
+  function onDisconnected() {
+    setStatus('', 'not connected');
+    $('btn-connect-any').disabled = false;
+    $('btn-connect-insta').disabled = false;
+    $('btn-disconnect').disabled = true;
+    $('btn-discover').disabled = true;
+    $('btn-write').disabled = true;
+    charByUuid.clear();
+    writeCharSelect.innerHTML = '<option>connect and discover first</option>';
+    treeEl.innerHTML = '<div class="hint">Disconnected. Reconnect on the Connect tab, then click Discover again, buttons from a previous connection stop working once the device drops.</div>';
+    resetDeviceDetails();
+    setField('dd-name', 'not connected', 'pending');
+    log('sys', 'sys', 'device disconnected');
+  }
+
+  // --- pull device name and details automatically ---
+  async function pullDeviceDetails() {
+    // Generic Access: try to read the real Device Name characteristic,
+    // this is often available even when device.name from the OS picker
+    // was empty or truncated.
+    try {
+      const gap = await server.getPrimaryService('generic_access');
+      const nameChar = await gap.getCharacteristic('00002a00-0000-1000-8000-00805f9b34fb');
+      const val = await nameChar.readValue();
+      const name = decodeUtf8(val);
+      if (name) {
+        setField('dd-name', name, 'teal');
+        setStatus('connected', `${name} - connected`);
+      }
+    } catch (err) {
+      if (device.name) {
+        setField('dd-name', device.name);
+      } else {
+        setField('dd-name', 'unavailable (device did not expose Generic Access / Device Name)', 'pending');
+      }
+      log('sys', 'sys', 'Generic Access device name not readable: ' + err.message);
+    }
+
+    // Device Information service
+    const diMap = [
+      ['00002a29-0000-1000-8000-00805f9b34fb', 'dd-manufacturer'],
+      ['00002a24-0000-1000-8000-00805f9b34fb', 'dd-model'],
+      ['00002a25-0000-1000-8000-00805f9b34fb', 'dd-serial'],
+      ['00002a27-0000-1000-8000-00805f9b34fb', 'dd-hw'],
+      ['00002a26-0000-1000-8000-00805f9b34fb', 'dd-fw'],
+      ['00002a28-0000-1000-8000-00805f9b34fb', 'dd-sw'],
+    ];
+    try {
+      const di = await server.getPrimaryService('device_information');
+      for (const [uuid, fieldId] of diMap) {
+        try {
+          const ch = await di.getCharacteristic(uuid);
+          const val = await ch.readValue();
+          setField(fieldId, decodeUtf8(val) || '(empty)');
+        } catch (e) {
+          setField(fieldId, 'not exposed', 'pending');
+        }
+      }
+    } catch (err) {
+      for (const [, fieldId] of diMap) setField(fieldId, 'not exposed', 'pending');
+      log('sys', 'sys', 'Device Information service not present: ' + err.message);
+    }
+
+    // Battery service
+    try {
+      const batt = await server.getPrimaryService('battery_service');
+      const ch = await batt.getCharacteristic('00002a19-0000-1000-8000-00805f9b34fb');
+      const val = await ch.readValue();
+      setField('dd-battery', `${val.getUint8(0)} %`, 'teal');
+    } catch (err) {
+      setField('dd-battery', 'not exposed', 'pending');
+    }
+  }
+
+  // --- discover ---
+  $('btn-discover').addEventListener('click', async () => {
+    if (!server) return;
+    treeEl.innerHTML = '';
+    writeCharSelect.innerHTML = '';
+    charByUuid.clear();
+    log('sys', 'sys', 'discovering services...');
+
+    let services;
+    try {
+      services = await server.getPrimaryServices();
+    } catch (err) {
+      log('err', 'sys', 'getPrimaryServices failed: ' + err.message);
+      return;
+    }
+
+    const treeIntro = document.createElement('div');
+    if (services.length === 0) {
+      treeIntro.className = 'hint';
+      treeIntro.style.marginTop = '0';
+      treeIntro.textContent = 'No services visible. If the device exposes a custom control service, add its UUID on the Connect tab and reconnect, Web Bluetooth only reveals services you explicitly request.';
+      treeEl.appendChild(treeIntro);
+    } else if (services.length === 1 && services[0].uuid.startsWith('00001800')) {
+      treeIntro.className = 'hint';
+      treeIntro.style.marginTop = '0';
+      treeIntro.textContent = 'Only Generic Access came through, which almost every BLE device exposes and which rarely has anything writable. If this device does more than that, its real control service is a vendor UUID this page was never granted, go to the Connect tab, check some boxes under Broaden discovery or open chrome://bluetooth-internals in a new tab to see the full table, then reconnect.';
+      treeEl.appendChild(treeIntro);
+    }
+
+    for (const service of services) {
+      const svcDiv = document.createElement('div');
+      svcDiv.className = 'svc';
+      svcDiv.innerHTML = `<div class="svc-head">${service.uuid} <span class="tag">${service.uuid.startsWith('0000') ? 'standard' : 'vendor specific'}</span></div>`;
+
+      let chars;
+      try {
+        chars = await service.getCharacteristics();
+      } catch (err) {
+        svcDiv.innerHTML += `<div class="char">read failed: ${err.message}</div>`;
+        treeEl.appendChild(svcDiv);
+        continue;
+      }
+
+      for (const char of chars) {
+        charByUuid.set(char.uuid, char);
+        const known = KNOWN_CHARS[char.uuid];
+        const p = char.properties;
+        const charDiv = document.createElement('div');
+        charDiv.className = 'char';
+        charDiv.innerHTML = `
+          <div class="uuid">${char.uuid}</div>
+          ${known ? `<div class="friendly">${known.name}</div>` : ''}
+          <div class="props">
+            <span class="${p.read ? 'on' : ''}">read</span>
+            <span class="${p.write ? 'on' : ''}">write</span>
+            <span class="${p.writeWithoutResponse ? 'on' : ''}">write no resp</span>
+            <span class="${p.notify ? 'on' : ''}">notify</span>
+            <span class="${p.indicate ? 'on' : ''}">indicate</span>
+          </div>
+          <div class="char-controls"></div>
+          <div class="char-value"></div>
+        `;
+        const controls = charDiv.querySelector('.char-controls');
+        const valueEl = charDiv.querySelector('.char-value');
+
+        if (p.read) {
+          const btn = document.createElement('button');
+          btn.className = 'small'; btn.textContent = 'Read';
+          btn.onclick = async () => {
+            try {
+              const val = await char.readValue();
+              const hex = bufToHex(val);
+              const decoded = (known && known.decode) ? known.decode(val) : null;
+              valueEl.innerHTML = decoded ? `${hex} <span class="decoded">(${decoded})</span>` : hex;
+              log('rx', 'read', `${char.uuid} -> ${hex}${decoded ? ' (' + decoded + ')' : ''}`);
+            } catch (err) {
+              log('err', 'read', `${char.uuid} failed: ${err.message}`);
+            }
+          };
+          controls.appendChild(btn);
+        }
+
+        if (p.notify || p.indicate) {
+          const btn = document.createElement('button');
+          btn.className = 'small'; btn.textContent = 'Subscribe';
+          let subscribed = false;
+          const handler = (ev) => {
+            const hex = bufToHex(ev.target.value);
+            const decoded = (known && known.decode) ? known.decode(ev.target.value) : null;
+            valueEl.innerHTML = decoded ? `${hex} <span class="decoded">(${decoded})</span>` : hex;
+            log('rx', 'notify', `${char.uuid} -> ${hex}`);
+          };
+          btn.onclick = async () => {
+            try {
+              if (!subscribed) {
+                await char.startNotifications();
+                char.addEventListener('characteristicvaluechanged', handler);
+                subscribed = true;
+                btn.textContent = 'Unsubscribe';
+                charDiv.classList.add('subscribed');
+                log('sys', 'sys', `subscribed to ${char.uuid}`);
+              } else {
+                await char.stopNotifications();
+                char.removeEventListener('characteristicvaluechanged', handler);
+                subscribed = false;
+                btn.textContent = 'Subscribe';
+                charDiv.classList.remove('subscribed');
+                log('sys', 'sys', `unsubscribed from ${char.uuid}`);
+              }
+            } catch (err) {
+              log('err', 'sys', `${char.uuid} subscribe failed: ${err.message}`);
+            }
+          };
+          controls.appendChild(btn);
+        }
+
+        if (p.write || p.writeWithoutResponse) {
+          const opt = document.createElement('option');
+          opt.value = char.uuid;
+          const tag = known && known.internal ? ' [GATT internal, not a device setting]' : '';
+          opt.textContent = `${char.uuid} (${service.uuid.slice(0, 8)}...)${tag}`;
+          writeCharSelect.appendChild(opt);
+        }
+
+        svcDiv.appendChild(charDiv);
+      }
+
+      treeEl.appendChild(svcDiv);
+    }
+
+    if (writeCharSelect.options.length > 0) {
+      $('btn-write').disabled = false;
+    } else {
+      writeCharSelect.innerHTML = '<option>no writable characteristics found, see Broaden discovery on the Connect tab</option>';
+    }
+
+    refreshPresetCharOptions();
+    log('sys', 'sys', `discovery complete, ${services.length} service(s) found.`);
+  });
+
+  // --- write ---
+  async function writeToChar(uuid, hexValue, mode) {
+    const char = charByUuid.get(uuid);
+    if (!char) throw new Error('characteristic not found, run Discover again');
+    const bytes = hexToBuf(hexValue);
+    const hex = bufToHex(bytes);
+    try {
+      if (mode === 'noresponse') {
+        await char.writeValueWithoutResponse(bytes);
+      } else {
+        await char.writeValueWithResponse(bytes);
+      }
+    } catch (err) {
+      // Always surface what was attempted, not just the browser's error
+      // text, "GATT Error Unknown" on its own gives no way to tell which
+      // characteristic or payload was involved.
+      let msg = `${uuid} <- ${hex} (${mode}) failed: ${err.message}`;
+      if (/gatt error unknown/i.test(err.message)) {
+        msg += '. This exact message is a known Chrome quirk, most common on Windows, and does not always mean the command was wrong. Things worth trying: pair the device in the OS Bluetooth settings first if it is not already paired, try the other write mode (with/without response), and keep the payload short, the default link only guarantees about 20 bytes per write until the browser negotiates a larger one.';
+      }
+      throw new Error(msg);
+    }
+    log('tx', 'write', `${uuid} <- ${hex} (${mode})`);
+  }
+
+  $('btn-write').addEventListener('click', async () => {
+    const uuid = writeCharSelect.value;
+    try {
+      await writeToChar(uuid, $('write-hex').value, $('write-mode').value);
+    } catch (err) {
+      log('err', 'write', err.message);
+    }
+  });
+
+  // --- log utilities ---
+  $('btn-clear-log').addEventListener('click', () => { logEl.innerHTML = ''; });
+
+  $('btn-save-log').addEventListener('click', () => {
+    const text = Array.from(logEl.querySelectorAll('.line'))
+      .map(l => l.textContent)
+      .join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ble-log-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // --- settings / presets ---
+  // In-memory only, nothing persists between page loads. That is
+  // intentional so this file never writes anything to disk on its own.
+
+  function charOptionsHtml(selectedUuid) {
+    let html = '<option value="">choose characteristic...</option>';
+    for (const uuid of charByUuid.keys()) {
+      const c = charByUuid.get(uuid);
+      if (!(c.properties.write || c.properties.writeWithoutResponse)) continue;
+      const known = KNOWN_CHARS[uuid];
+      const tag = known && known.internal ? ' [GATT internal, not a device setting]' : '';
+      const sel = uuid === selectedUuid ? 'selected' : '';
+      html += `<option value="${uuid}" ${sel}>${uuid}${tag}</option>`;
+    }
+    return html;
+  }
+
+  function makePresetRow(container, { name, defaultHex = '', charUuid = '' } = {}) {
+    const row = document.createElement('div');
+    row.className = 'preset';
+    row.innerHTML = `
+      <div class="preset-name">${name}</div>
+      <div class="row" style="margin:0; gap:6px">
+        <select class="preset-char" style="flex:1"></select>
+        <input type="text" class="preset-hex" placeholder="hex bytes, e.g. a5 01 02 a8" value="${defaultHex}" style="flex:1">
+      </div>
+      <button class="small preset-send">Send</button>
+    `;
+    const select = row.querySelector('.preset-char');
+    select.innerHTML = charOptionsHtml(charUuid);
+    row.querySelector('.preset-send').addEventListener('click', async () => {
+      const uuid = select.value;
+      const hex = row.querySelector('.preset-hex').value.trim();
+      if (!uuid) { log('err', 'preset', `"${name}": choose a characteristic first`); return; }
+      if (!hex) { log('err', 'preset', `"${name}": enter hex bytes first`); return; }
+      try {
+        await writeToChar(uuid, hex, 'response');
+      } catch (err) {
+        log('err', 'preset', `"${name}" failed: ${err.message}`);
+      }
+    });
+    container.appendChild(row);
+    return row;
+  }
+
+  ['Omnidirectional', 'Directional pickup', 'Stereo'].forEach(name => {
+    makePresetRow($('preset-mic-mode'), { name });
+  });
+  ['Off', 'Low', 'High'].forEach(name => {
+    makePresetRow($('preset-noise-reduction'), { name });
+  });
+
+  $('btn-add-preset').addEventListener('click', () => {
+    const name = prompt('Preset name, for example "Mute" or "LED off"');
+    if (!name) return;
+    makePresetRow($('preset-custom'), { name });
+  });
+
+  function refreshPresetCharOptions() {
+    document.querySelectorAll('.preset-char').forEach(sel => {
+      const current = sel.value;
+      sel.innerHTML = charOptionsHtml(current);
+    });
+  }
+
+  resetDeviceDetails();
+})();
+</script>
+
+</body>
+</html>
